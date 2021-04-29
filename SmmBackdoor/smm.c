@@ -68,6 +68,10 @@ static void backdoor_api_hello_world_test(struct BackdoorParams* params) {
     params->r[5] = 0x4141414141414141;
 }
 
+static void backdoor_api_get_current_cpu(struct BackdoorParams* params) {
+    params->r[0] = gStmt->CurrentlyExecutingCpu;
+}
+
 static void backdoor_api_wakeup(struct BackdoorParams* params) {
     unregister_periodic_interrupt();
     params->r[0] = register_periodic_interrupt();
@@ -87,6 +91,10 @@ static BOOLEAN handle_cpu_core(UINT32 cpu) {
 
             case BACKDOOR_WAKEUP:
                 backdoor_api_wakeup(&params);
+                break;
+
+            case BACKDOOR_GET_CURRENT_CPU:
+                backdoor_api_get_current_cpu(&params);
                 break;
         }
 
