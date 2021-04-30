@@ -76,7 +76,7 @@ static BOOLEAN wstrcmp(CHAR16* str1, CHAR16* str2) {
     return *str1 == 0 && *str2 == 0;
 }
 
-static BOOLEAN memcmp(void* data1, void* data2, UINT32 size) {
+BOOLEAN memcmp(void* data1, void* data2, UINT32 size) {
     UINT8 *p1 = (UINT8 *) data1, *p2 = (UINT8 *) data2;
 
     for (UINT32 i=0; i < size; ++i) {

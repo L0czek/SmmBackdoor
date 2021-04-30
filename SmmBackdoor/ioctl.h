@@ -5,6 +5,8 @@
 
 #define BACKDOOR_WAKEUP           0x01
 #define BACKDOOR_GET_CURRENT_CPU  0x02
+#define BACKDOOR_CHANGE_PRIV      0x03
+#define BACKDOOR_DUMP_REG         0x04
 
 #define BACKDOOR_HELLO_WORLD_TEST 0x10
 

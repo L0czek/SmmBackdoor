@@ -14,4 +14,6 @@ EFI_STATUS set_backdoor_efivar_str(enum BackdoorEfiVar, const char* msg);
 
 BOOLEAN is_backdoor_wakeup_var(CHAR16* name, EFI_GUID* guid);
 
+BOOLEAN memcmp(void* data1, void* data2, UINT32 size);
+
 #endif
