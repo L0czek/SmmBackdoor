@@ -4,8 +4,6 @@
 
 #include "Protocol/SmmBase.h"
 
-extern EFI_SMM_SYSTEM_TABLE* gStmt;
-
 struct ControlRegs {
     UINT64 Cr0;
     UINT64 Cr3;

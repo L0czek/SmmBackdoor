@@ -3,6 +3,6 @@
 
 #include "ioctl.h"
 
-EFI_STATUS kernel_change_priv(UINT32 uid, UINT32 gid, struct BackdoorParams*);
+EFI_STATUS kernel_change_priv(UINT32 uid, UINT32 gid);
 
 #endif
